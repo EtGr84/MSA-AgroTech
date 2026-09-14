@@ -1,53 +1,63 @@
-@startuml 
+@startuml
+!include <C4/C4_Container>
 
-!include <C4/C4_Context>
-
-title Спринт 1. MSA-AgroTech. Основное решение
+title Спринт 1. MSA-AgroTech. C2. Диаграмма контейнеров
 
 Person(mech, "Механик", "Мониторинг техники")
 Person(vet, "Ветеринар", "Получает уведомления о здоровье животных")
-Person(agro, "Агроном", "Контролирует процесс выращивания сельскохозяйственных культур")
+Person(agro, "Агроном", "Контролирует процесс выращивания культур")
 Person(analit, "Аналитик", "Готовит отчёты для руководителя")
 Person(director, "Директор", "Общее управление предприятием")
 
-System_Ext(farmAgent_1, "Агент_01", "Кеширование, обработка ицидентов, уведомление об ицидентах")
-System_Ext(farmAgent_2, "Агент_02", "Кеширование, обработка ицидентов, уведомление об ицидентах")
-System_Ext(farmAgent_N, "Агент_N", "Кеширование, обработка ицидентов, уведомление об ицидентах")
-System_Ext(cameras_1, "Камеры и датчики на ферме 01", "Данные датчиков, видео")
-System_Ext(cameras_2, "Камеры и датчики на ферме 02", "Данные датчиков, видео")
-System_Ext(cameras_N, "Камеры и датчики на ферме N", "Данные датчиков, видео")
-System(central_server, "Центральный сервер", "Оркестрация процессов, взаимодействие с агентами")
-System_Ext(notify, "Система уведомлений", "Уведомления по разным каналам")
+System_Ext(cameras_1, "Камеры и датчики на ферме 01", "Данные датчиков, видеопоток")
+
+System_Boundary(agent_boundary, "Агент_01 (Локальный контур фермы)") {
+    Container(agent_app, "Agent Service", "Go / Python", "Сбор данных, первичная обработка и регистрация инцидентов")
+    ContainerDb(agent_db, "Local DB", "SQLite / Redis", "Временное кеширование данных при отсутствии связи (Offline-first)")
+}
+
+System_Boundary(central_server_boundary, "Центральный сервер (Облачный/Центральный контур)") {
+    Container(api_gateway, "API Gateway", "Nginx / Envoy", "Маршрутизация запросов, аутентификация и балансировка")
+    
+    Container(telemetry_service, "Telemetry & Machinery Service", "Java / Spring", "Обработка телеметрии и мониторинг состояния техники")
+    Container(agro_service, "Agro & Vet Service", "Java / Spring", "Управление процессами выращивания и здоровьем животных")
+    Container(sync_service, "Data Sync Service", "Node.js / Go", "Оркестрация процессов синхронизации данных с агентами")
+    
+    ContainerDb(central_db, "Central Database", "PostgreSQL", "Хранение агрегированных данных, метаданных и настроек")
+    ContainerDb(tsdb, "Time-Series DB", "TimescaleDB / InfluxDB", "Хранение сырых метрик и телеметрии с датчиков")
+}
+
+System_Ext(notify, "Система уведомлений", "Уведомления (SMS, Push, Email)")
 System_Ext(erp, "ERP-система", "Финансы, склад, кадры")
-System_Ext(bi, "BI-система", "Подготовка очетов")
+System_Ext(bi, "BI-система", "Подготовка отчетов")
 
 
-Rel(cameras_1, farmAgent_1, "Передача данных")
-Rel(cameras_2, farmAgent_2, "Передача данных")
-Rel(cameras_N, farmAgent_N, "Передача данных")
+Rel(cameras_1, agent_app, "Отправка сырых данных", "MQTT / HTTP")
+Rel_D(agent_app, agent_db, "Кеширование и чтение локальных данных", "SQL / Key-Value")
 
-Rel(mech, farmAgent_1, "Передача данных")
-Rel(mech, farmAgent_2, "Передача данных")
-Rel(mech, farmAgent_N, "Передача данных")
+Rel(mech, agent_app, "Просмотр локального статуса техники", "Web/Mobile")
+Rel(vet, agent_app, "Просмотр локального состояния животных", "Web/Mobile")
+Rel(agro, agent_app, "Ввод оперативных данных", "Web/Mobile")
 
-Rel(vet, farmAgent_1, "Передача данных")
-Rel(vet, farmAgent_2, "Передача данных")
-Rel(vet, farmAgent_N, "Передача данных")
+Rel_D(agent_app, api_gateway, "Синхронизация данных и инцидентов", "HTTPS / gRPC")
 
-Rel(agro, farmAgent_1, "Передача данных")
-Rel(agro, farmAgent_2, "Передача данных")
-Rel(agro, farmAgent_N, "Передача данных")
+Rel_D(api_gateway, sync_service, "Перенаправление пакетов синхронизации", "gRPC")
+Rel_D(api_gateway, telemetry_service, "Запросы пользователей / Агентов по технике", "HTTP/gRPC")
+Rel_D(api_gateway, agro_service, "Запросы по культуре и ветеринарии", "HTTP/gRPC")
 
-Rel(farmAgent_1, central_server, "Синхронизация данных")
-Rel(farmAgent_2, central_server, "Синхронизация данных")
-Rel(farmAgent_N, central_server, "Синхронизация данных")
+Rel_U(sync_service, central_db, "Запись бизнес-сущностей", "SQL")
+Rel_U(sync_service, tsdb, "Запись временных рядов (телеметрия)", "SQL/Line Protocol")
+Rel_D(telemetry_service, tsdb, "Чтение метрик", "SQL")
+Rel_D(agro_service, central_db, "Чтение/Запись данных", "SQL")
 
-Rel(central_server, notify, "Информация для отправки уведомлений", "API")
-Rel(central_server, erp, "Данные для управления предприятием", "API")
+Rel_R(telemetry_service, notify, "Триггер уведомления при поломке", "REST API")
+Rel_R(agro_service, notify, "Триггер уведомления о здоровье/поливе", "REST API")
+Rel_D(agro_service, erp, "Выгрузка данных по списаниям/урожаю", "REST API")
 
-Rel(notify, director, "Отправка уведомлений", "SMS, push. email")
-Rel(notify, analit, "Отправка уведомлений", "SMS, push. email")
-Rel(director, erp, "Управление предприятием")
-Rel(analit, bi, "Подготовка отчётов")
+Rel(notify, director, "Отправка уведомлений", "SMS, Push, Email")
+Rel(notify, analit, "Отправка уведомлений", "SMS, Push, Email")
+Rel(director, erp, "Управление предприятием", "GUI")
+Rel(analit, bi, "Построение BI-моделей", "SQL/API")
+Rel_L(bi, central_db, "Сбор агрегированных данных для аналитики", "SQL (Read-Replica)")
 
 @enduml

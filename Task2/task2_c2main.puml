@@ -39,20 +39,20 @@ Rel(mech, agent_app, "Просмотр локального статуса те�
 Rel(vet, agent_app, "Просмотр локального состояния животных", "Web/Mobile")
 Rel(agro, agent_app, "Ввод оперативных данных", "Web/Mobile")
 
-Rel_D(agent_app, api_gateway, "Синхронизация данных и инцидентов", "HTTPS / gRPC")
+Rel(agent_app, api_gateway, "Синхронизация данных и инцидентов", "HTTPS / gRPC")
 
-Rel_D(api_gateway, sync_service, "Перенаправление пакетов синхронизации", "gRPC")
-Rel_D(api_gateway, telemetry_service, "Запросы пользователей / Агентов по технике", "HTTP/gRPC")
-Rel_D(api_gateway, agro_service, "Запросы по культуре и ветеринарии", "HTTP/gRPC")
+Rel(api_gateway, sync_service, "Перенаправление пакетов синхронизации", "gRPC")
+Rel(api_gateway, telemetry_service, "Запросы пользователей / Агентов по технике", "HTTP/gRPC")
+Rel(api_gateway, agro_service, "Запросы по культуре и ветеринарии", "HTTP/gRPC")
 
-Rel_U(sync_service, central_db, "Запись бизнес-сущностей", "SQL")
-Rel_U(sync_service, tsdb, "Запись временных рядов (телеметрия)", "SQL/Line Protocol")
-Rel_D(telemetry_service, tsdb, "Чтение метрик", "SQL")
-Rel_D(agro_service, central_db, "Чтение/Запись данных", "SQL")
+Rel(sync_service, central_db, "Запись бизнес-сущностей", "SQL")
+Rel(sync_service, tsdb, "Запись временных рядов (телеметрия)", "SQL/Line Protocol")
+Rel(telemetry_service, tsdb, "Чтение метрик", "SQL")
+Rel(agro_service, central_db, "Чтение/Запись данных", "SQL")
 
-Rel_R(telemetry_service, notify, "Триггер уведомления при поломке", "REST API")
-Rel_R(agro_service, notify, "Триггер уведомления о здоровье/поливе", "REST API")
-Rel_D(agro_service, erp, "Выгрузка данных по списаниям/урожаю", "REST API")
+Rel(telemetry_service, notify, "Триггер уведомления при поломке", "REST API")
+Rel(agro_service, notify, "Триггер уведомления о здоровье/поливе", "REST API")
+Rel(agro_service, erp, "Выгрузка данных по списаниям/урожаю", "REST API")
 
 Rel(notify, director, "Отправка уведомлений", "SMS, Push, Email")
 Rel(notify, analit, "Отправка уведомлений", "SMS, Push, Email")

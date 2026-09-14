@@ -1,7 +1,7 @@
 @startuml
 !include <C4/C4_Container>
 
-title Спринт 1. MSA-AgroTech. C2. Диаграмма контейнеров
+title Спринт 1. MSA-AgroTech. C2. Основное решение
 
 Person(mech, "Механик", "Мониторинг техники")
 Person(vet, "Ветеринар", "Получает уведомления о здоровье животных")

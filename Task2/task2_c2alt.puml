@@ -1,1 +1,95 @@
+@startuml
+!include <C4/C4_Container>
 
+title Спринт 1. MSA-AgroTech. C2. Облачная платформа и локальный агент
+
+Person(mech, "Механик", "Мониторинг техники")
+Person(vet, "Ветеринар", "Получает уведомления о здоровье животных")
+Person(agro, "Агроном", "Контролирует процесс выращивания культур")
+Person(analit, "Аналитик", "Готовит отчёты для руководителя")
+Person(director, "Директор", "Общее управление предприятием")
+
+System_Ext(cameras_1, "Камеры и датчики на ферме 01", "Данные датчиков, видеопоток")
+
+System_Boundary(agent_boundary, "Агент_01 (Локальный контур фермы)") {
+    Container(agent_app, "Agent Service", "Go / Python", "Сбор данных, первичная обработка и регистрация инцидентов")
+    ContainerDb(agent_db, "Local DB", "SQLite / Redis", "Временное кеширование данных при отсутствии связи (Offline-first)")
+}
+
+System_Boundary(cloud, "Облачная платформа") {
+    Container(api_gateway, "API Gateway", "Kong / Managed API Gateway", "Вход, rate-limit, маршрутизация")
+    Container(auth_service, "Access Service", "Go", "Роли, проверка политик и сессии")
+    Container(stream_ingest, "Stream Ingest", "Go", "Прием телеметрии и видео-событий")
+    Container(video_analytics, "Cloud Video Analytics", "Python + GPU", "Централизованный видеоинференс")
+    Container(rule_engine, "Incident Rule Engine", "Go", "Правила эскалации и дедупликация")
+    Container(livestock_service, "Livestock Service", "Go", "Учет животных")
+    Container(feeding_service, "Feeding Service", "Go", "Управление кормлением")
+    Container(equipment_service, "Equipment Service", "Go", "Мониторинг инженерных систем")
+    Container(notification_hub, "Notification Subsystem", "Go", "Оркестрация и отправка уведомлений (SMS, Push, Email)")
+    Container(integration_hub, "Integration Hub", "Go", "Интеграция с внешними системами")
+    Container(stream_bus, "Cloud Event Bus", "Managed Kafka / PubSub", "Событийная шина")
+    
+    ContainerDb(oltp_db, "OLTP DB", "Managed PostgreSQL", "Операционные данные")
+    ContainerDb(cache, "Hot Cache", "Redis Cluster", "Быстрый доступ к активным сессиям")
+    ContainerDb(data_lake, "Data Lake", "Object Storage", "Сырое видео и события")
+    ContainerDb(warehouse, "Warehouse", "Cloud DW", "Аналитические витрины")
+}
+
+System_Ext(erp, "ERP-система", "Финансы, склад, кадры")
+
+' --- Связи на локальной ферме ---
+Rel(cameras_1, agent_app, "Отправка сырых данных", "MQTT / RTSP / HTTP")
+Rel_D(agent_app, agent_db, "Кеширование и чтение локальных данных", "SQL / Key-Value")
+
+Rel(mech, agent_app, "Просмотр локального статуса техники", "Web/Mobile")
+Rel(vet, agent_app, "Просмотр локального состояния животных", "Web/Mobile")
+Rel(agro, agent_app, "Ввод оперативных данных", "Web/Mobile")
+
+' --- Интеграция Агента с Облаком ---
+Rel(agent_app, stream_ingest, "Передача потока телеметрии и видео", "gRPC / HTTPS")
+Rel(agent_app, api_gateway, "Синхронизация инцидентов и статусов", "HTTPS")
+
+' --- Авторизация и периметр API ---
+Rel(analit, api_gateway, "Построение отчетов и анализ данных", "HTTPS / Web UI")
+Rel(api_gateway, auth_service, "Проверка прав", "gRPC")
+Rel(auth_service, cache, "Кэш сессий", "Redis")
+
+' --- Маршрутизация команд в доменные сервисы и витрины ---
+Rel(api_gateway, livestock_service, "Команды API", "gRPC")
+Rel(api_gateway, feeding_service, "Команды API", "gRPC")
+Rel(api_gateway, equipment_service, "Команды API", "gRPC")
+Rel(api_gateway, warehouse, "Аналитические выборки и отчеты", "SQL / BI Connector")
+
+' --- Брокер событий и потоковая обработка ---
+Rel(stream_ingest, stream_bus, "Публикует телеметрию и события", "Kafka protocol")
+Rel(video_analytics, stream_bus, "Читает/пишет события видео", "Kafka protocol")
+Rel(rule_engine, stream_bus, "Корреляция инцидентов", "Kafka protocol")
+Rel(livestock_service, stream_bus, "Доменные события", "Kafka protocol")
+Rel(feeding_service, stream_bus, "Команды и факты", "Kafka protocol")
+Rel(equipment_service, stream_bus, "Телеметрия оборудования", "Kafka protocol")
+
+' --- Аналитика и правила ---
+Rel(video_analytics, rule_engine, "Детекции событий", "gRPC")
+Rel(rule_engine, notification_hub, "Сформированные тревоги", "gRPC")
+Rel(video_analytics, data_lake, "Сохранение фрагментов видео", "S3 API")
+
+' --- Базы данных ---
+Rel(livestock_service, oltp_db, "Чтение/запись", "SQL")
+Rel(feeding_service, oltp_db, "Чтение/запись", "SQL")
+Rel(equipment_service, oltp_db, "Чтение/запись", "SQL")
+Rel(stream_bus, warehouse, "Поток в аналитику", "ETL/ELT")
+Rel(data_lake, warehouse, "Обогащение витрин", "Batch ETL")
+
+' --- Интеграция с внешними системами ---
+Rel(integration_hub, stream_bus, "Подписка на события", "Kafka protocol")
+Rel(integration_hub, erp, "Синхронизация данных", "REST")
+
+' --- Прямая отправка уведомлений пользователям из встроенной подсистемы ---
+Rel(notification_hub, director, "Отправка уведомлений", "SMS, Push, Email")
+Rel(notification_hub, analit, "Отправка уведомлений", "SMS, Push, Email")
+Rel(notification_hub, vet, "Экстренные алерты по животным", "Push / SMS")
+Rel(notification_hub, mech, "Алерты по сбоям техники", "Push / SMS")
+
+Rel(director, erp, "Управление предприятием", "GUI")
+
+@enduml

@@ -1,0 +1,115 @@
+@startuml
+!include <C4/C4_Component>
+
+title Спринт 1. MSA-AgroTech. C3. Компоненты облачной платформы
+
+Person(mech, "Механик", "Мониторинг техники")
+Person(vet, "Ветеринар", "Получает уведомления о здоровье животных")
+Person(agro, "Агроном", "Контролирует процесс выращивания культур")
+Person(analit, "Аналитик", "Готовит отчёты для руководителя")
+Person(director, "Директор", "Общее управление предприятием")
+
+System_Ext(cameras_1, "Камеры и датчики на ферме 01", "Данные датчиков, видеопоток")
+System_Ext(erp, "ERP-система", "Финансы, склад, кадры")
+
+System_Boundary(agent_boundary, "Агент_01 (Локальный контур фермы)") {
+    Container(agent_app, "Agent Service", "Go / Python", "Сбор данных, первичная обработка и регистрация инцидентов")
+    ContainerDb(agent_db, "Local DB", "SQLite / Redis", "Временное кеширование данных")
+}
+
+System_Boundary(cloud, "Облачная платформа") {
+    
+    Container_Boundary(api_gateway_b, "API Gateway") {
+        Component(rate_limiter, "Rate Limiter & Router", "Go / Kong", "Вход, rate-limit, маршрутизация")
+    }
+
+    Container_Boundary(auth_service_b, "Access Service") {
+        Component(rbac_checker, "RBAC Policy Engine", "Go", "Роли, проверка политик и сессии")
+    }
+
+    Container_Boundary(stream_ingest_b, "Stream Ingest") {
+        Component(telemetry_parser, "Telemetry Parser", "Go", "Прием телеметрии и видео-событий")
+    }
+
+    Container_Boundary(video_analytics_b, "Cloud Video Analytics") {
+        Component(ml_inference, "ML Inference Engine", "Python + GPU", "Централизованный видеоинференс")
+    }
+
+    Container_Boundary(rule_engine_b, "Incident Rule Engine") {
+        Component(event_correlator, "Event Correlator", "Go", "Правила эскалации и дедупликация")
+    }
+
+    Container_Boundary(livestock_service_b, "Livestock Service") {
+        Component(livestock_logic, "Livestock Domain Logic", "Go", "Учет животных")
+    }
+
+    Container_Boundary(feeding_service_b, "Feeding Service") {
+        Component(feeding_logic, "Feeding Domain Logic", "Go", "Управление кормлением")
+    }
+
+    Container_Boundary(equipment_service_b, "Equipment Service") {
+        Component(equipment_logic, "Equipment Domain Logic", "Go", "Мониторинг инженерных систем")
+    }
+
+    Container_Boundary(notification_hub_b, "Notification Subsystem") {
+        Component(notif_router, "Notification Router", "Go", "Оркестрация и отправка уведомлений (SMS, Push, Email)")
+    }
+
+    Container_Boundary(integration_hub_b, "Integration Hub") {
+        Component(erp_adapter, "ERP Adapter", "Go", "Интеграция с внешними системами")
+    }
+
+    Container(stream_bus, "Cloud Event Bus", "Managed Kafka / PubSub", "Событийная шина")
+    ContainerDb(oltp_db, "OLTP DB", "Managed PostgreSQL", "Операционные данные")
+    ContainerDb(cache, "Hot Cache", "Redis Cluster", "Быстрый доступ к активным сессиям")
+    ContainerDb(data_lake, "Data Lake", "Object Storage", "Сырое видео и события")
+    ContainerDb(warehouse, "Warehouse", "Cloud DW", "Аналитические витрины")
+}
+
+Rel(cameras_1, agent_app, "Отправка сырых данных", "MQTT / RTSP / HTTP")
+Rel_D(agent_app, agent_db, "Кеширование и чтение локальных данных", "SQL / Key-Value")
+
+Rel(mech, agent_app, "Просмотр локального статуса техники", "Web/Mobile")
+Rel(vet, agent_app, "Просмотр локального состояния животных", "Web/Mobile")
+Rel(agro, agent_app, "Ввод оперативных данных", "Web/Mobile")
+
+Rel(agent_app, telemetry_parser, "Передача потока телеметрии и видео", "gRPC / HTTPS")
+Rel(agent_app, rate_limiter, "Синхронизация инцидентов и статусов", "HTTPS")
+
+Rel(analit, rate_limiter, "Построение отчетов и анализ данных", "HTTPS / Web UI")
+Rel(rate_limiter, rbac_checker, "Проверка прав", "gRPC")
+Rel(rbac_checker, cache, "Кэш сессий", "Redis")
+
+Rel(rate_limiter, livestock_logic, "Команды API", "gRPC")
+Rel(rate_limiter, feeding_logic, "Команды API", "gRPC")
+Rel(rate_limiter, equipment_logic, "Команды API", "gRPC")
+Rel(rate_limiter, warehouse, "Аналитические выборки и отчеты", "SQL / BI Connector")
+
+Rel(telemetry_parser, stream_bus, "Публикует телеметрию и события", "Kafka protocol")
+Rel(ml_inference, stream_bus, "Читает/пишет события видео", "Kafka protocol")
+Rel(event_correlator, stream_bus, "Корреляция инцидентов", "Kafka protocol")
+Rel(livestock_logic, stream_bus, "Доменные события", "Kafka protocol")
+Rel(feeding_logic, stream_bus, "Команды и факты", "Kafka protocol")
+Rel(equipment_logic, stream_bus, "Телеметрия оборудования", "Kafka protocol")
+
+Rel(ml_inference, event_correlator, "Детекции событий", "gRPC")
+Rel(event_correlator, notif_router, "Сформированные тревоги", "gRPC")
+Rel(ml_inference, data_lake, "Сохранение фрагментов видео", "S3 API")
+
+Rel(livestock_logic, oltp_db, "Чтение/запись", "SQL")
+Rel(feeding_logic, oltp_db, "Чтение/запись", "SQL")
+Rel(equipment_logic, oltp_db, "Чтение/запись", "SQL")
+Rel(stream_bus, warehouse, "Поток в аналитику", "ETL/ELT")
+Rel(data_lake, warehouse, "Обогащение витрин", "Batch ETL")
+
+Rel(erp_adapter, stream_bus, "Подписка на события", "Kafka protocol")
+Rel(erp_adapter, erp, "Синхронизация данных", "REST")
+
+Rel(notif_router, director, "Отправка уведомлений", "SMS, Push, Email")
+Rel(notif_router, analit, "Отправка уведомлений", "SMS, Push, Email")
+Rel(notif_router, vet, "Экстренные алерты по животным", "Push / SMS")
+Rel(notif_router, mech, "Алерты по сбоям техники", "Push / SMS")
+
+Rel(director, erp, "Управление предприятием", "GUI")
+
+@enduml

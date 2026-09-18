@@ -1,0 +1,53 @@
+@startuml 
+
+!include <C4/C4_Context>
+
+title Спринт 1. MSA-AgroTech. C1. Основное решение
+
+Person(mech, "Механик", "Мониторинг техники")
+Person(vet, "Ветеринар", "Получает уведомления о здоровье животных")
+Person(agro, "Агроном", "Контролирует процесс выращивания сельскохозяйственных культур")
+Person(analit, "Аналитик", "Готовит отчёты для руководителя")
+Person(director, "Директор", "Общее управление предприятием")
+
+System_Ext(farmAgent_1, "Агент_01", "Кеширование, обработка ицидентов, уведомление об ицидентах")
+System_Ext(farmAgent_2, "Агент_02", "Кеширование, обработка ицидентов, уведомление об ицидентах")
+System_Ext(farmAgent_N, "Агент_N", "Кеширование, обработка ицидентов, уведомление об ицидентах")
+System_Ext(cameras_1, "Камеры и датчики на ферме 01", "Данные датчиков, видео")
+System_Ext(cameras_2, "Камеры и датчики на ферме 02", "Данные датчиков, видео")
+System_Ext(cameras_N, "Камеры и датчики на ферме N", "Данные датчиков, видео")
+System(central_server, "Центральный сервер", "Оркестрация процессов, взаимодействие с агентами")
+System_Ext(notify, "Система уведомлений", "Уведомления по разным каналам")
+System_Ext(erp, "ERP-система", "Финансы, склад, кадры")
+System_Ext(bi, "BI-система", "Подготовка очетов")
+
+
+Rel(cameras_1, farmAgent_1, "Передача данных")
+Rel(cameras_2, farmAgent_2, "Передача данных")
+Rel(cameras_N, farmAgent_N, "Передача данных")
+
+Rel(mech, farmAgent_1, "Передача данных")
+Rel(mech, farmAgent_2, "Передача данных")
+Rel(mech, farmAgent_N, "Передача данных")
+
+Rel(vet, farmAgent_1, "Передача данных")
+Rel(vet, farmAgent_2, "Передача данных")
+Rel(vet, farmAgent_N, "Передача данных")
+
+Rel(agro, farmAgent_1, "Передача данных")
+Rel(agro, farmAgent_2, "Передача данных")
+Rel(agro, farmAgent_N, "Передача данных")
+
+Rel(farmAgent_1, central_server, "Синхронизация данных")
+Rel(farmAgent_2, central_server, "Синхронизация данных")
+Rel(farmAgent_N, central_server, "Синхронизация данных")
+
+Rel(central_server, notify, "Информация для отправки уведомлений", "API")
+Rel(central_server, erp, "Данные для управления предприятием", "API")
+
+Rel(notify, director, "Отправка уведомлений", "SMS, push. email")
+Rel(notify, analit, "Отправка уведомлений", "SMS, push. email")
+Rel(director, erp, "Управление предприятием")
+Rel(analit, bi, "Подготовка отчётов")
+
+@enduml

@@ -1,0 +1,48 @@
+@startuml SaaS-C1
+
+!include <C4/C4_Container>
+
+title SaaS архитектура C1
+
+Person(Agro1, "Агрохолдинг1", "Клиент1 SaaS")
+Person(Agro2, "Агрохолдинг2", "Клиент2 SaaS")
+Person(Agro3, "Агрохолдинг3", "Клиент3 SaaS")
+Person(role_director, "Руководитель", "Контроль бизнеса через веб-панель")
+Person(role_analyst, "Аналитик данных", "Формирование отчётов и дашбордов")
+Person(role_engineer, "Инженер-механик", "Мониторинг парка техники и алертов")
+Person_Ext(operator_admin, "Оператор платформы", "Администрирование тарифов и тенантов")
+Person_Ext(operator_help, "Служба поддержки", "Обработка клиентских инцидентов")
+
+System_Boundary(cloud_env, "Облачная экосистема AgroCloud Suite") {
+    System(main_saas, "Ядро SaaS-платформы", "Мультитенантная система контроля животноводства, посевов и техники")
+}
+
+System_Ext(ext_erp, "Корпоративная ERP", "1С, SAP, МойСклад")
+System_Ext(ext_bi, "BI-платформа", "Power BI, Apache Superset")
+System_Ext(iot_gateway, "Полевой шлюз IoT", "Node-RED, полевые датчики")
+System_Ext(vision_node, "Видеоаналитика", "Smart-камеры с edge/cloud ML")
+System_Ext(machinery_telemetry, "Бортовые трекеры", "GPS-модули и CAN-шины техники")
+System_Ext(fin_gateways, "Платежные шлюзы", "ЮKassa, эквайринг банков")
+System_Ext(sms_gate, "SMS-агрегатор", "Оперативные текстовые оповещения")
+System_Ext(mail_gate, "Почтовый шлюз", "Транзакционная рассылка писем")
+System_Ext(dev_docs, "Портал разработчика", "OpenAPI спека, документация и SDK")
+
+Rel(Agro1, main_saas, "Веб-интерфейс и API", "HTTPS")
+Rel(Agro2, main_saas, "Веб-интерфейс и API", "HTTPS")
+Rel(Agro3, main_saas, "Веб-интерфейс, API и On-prem", "HTTPS / VPN")
+Rel(main_saas, ext_erp, "Синхронизация учетных данных", "REST API")
+Rel(ext_bi, main_saas, "Запрос сырых и агрегированных метрик", "REST API")
+Rel(main_saas, fin_gateways, "Обработка подписок и платежей", "API")
+Rel(main_saas, sms_gate, "Отправка СМС", "API")
+Rel(main_saas, mail_gate, "Отправка писем", "SMTP")
+Rel(operator_admin, main_saas, "Консоль администратора", "Admin UI")
+Rel(operator_help, main_saas, "Консоль саппорта", "Support UI")
+Rel(role_director, main_saas, "Управленческий дашборд")
+Rel(role_analyst, main_saas, "Аналитические инструменты")
+Rel(role_engineer, main_saas, "Панель алертов техники")
+Rel(iot_gateway, main_saas, "Телеметрический поток", "MQTT / HTTPS")
+Rel(vision_node, main_saas, "События распознавания", "HTTPS")
+Rel(machinery_telemetry, main_saas, "Координаты и состояние", "HTTPS")
+Rel(dev_docs, main_saas, "Генерация спецификаций", "OpenAPI spec")
+
+@enduml

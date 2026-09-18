@@ -1,0 +1,54 @@
+@startuml 
+
+!include <C4/C4_Context>
+
+title Спринт 1. MSA-AgroTech. C1. Альтернативное решение
+
+Person(mech, "Механик", "Мониторинг техники")
+Person(vet, "Ветеринар", "Получает уведомления о здоровье животных")
+Person(agro, "Агроном", "Контролирует процесс выращивания сельскохозяйственных культур")
+Person(analit, "Аналитик", "Готовит отчёты для руководителя")
+Person(director, "Директор", "Общее управление предприятием")
+
+System_Ext(farmAgent_1, "Агент_01", "Кеширование, обработка ицидентов, уведомление об ицидентах")
+System_Ext(farmAgent_2, "Агент_02", "Кеширование, обработка ицидентов, уведомление об ицидентах")
+System_Ext(farmAgent_N, "Агент_N", "Кеширование, обработка ицидентов, уведомление об ицидентах")
+System_Ext(cameras_1, "Камеры и датчики на ферме 01", "Данные датчиков, видео")
+System_Ext(cameras_2, "Камеры и датчики на ферме 02", "Данные датчиков, видео")
+System_Ext(cameras_N, "Камеры и датчики на ферме N", "Данные датчиков, видео")
+System(saas, "Сервер облачных вычислений", "Облачная платформа для сбора данных и аналитики, предоставляет интерфейс управления")
+System_Ext(notify, "Система уведомлений", "Уведомления по разным каналам")
+System_Ext(erp, "ERP-система", "Финансы, склад, кадры")
+'System_Ext(bi, "BI-система", "Подготовка очетов")
+
+
+Rel(cameras_1, farmAgent_1, "Передача данных", LAN)
+Rel(cameras_2, farmAgent_2, "Передача данных", LAN)
+Rel(cameras_N, farmAgent_N, "Передача данных", LAN)
+
+Rel(mech, farmAgent_1, "Передача данных", LAN)
+Rel(mech, farmAgent_2, "Передача данных", LAN)
+Rel(mech, farmAgent_N, "Передача данных", LAN)
+
+Rel(vet, farmAgent_1, "Передача данных", LAN)
+Rel(vet, farmAgent_2, "Передача данных", LAN)
+Rel(vet, farmAgent_N, "Передача данных", LAN)
+
+Rel(agro, farmAgent_1, "Передача данных", LAN)
+Rel(agro, farmAgent_2, "Передача данных", LAN)
+Rel(agro, farmAgent_N, "Передача данных", LAN)
+
+Rel(farmAgent_1, saas, "Синхронизация данных", WAN)
+Rel(farmAgent_2, saas, "Синхронизация данных", WAN)
+Rel(farmAgent_N, saas, "Синхронизация данных", WAN)
+
+Rel(saas, notify, "Информация для отправки уведомлений", "API")
+Rel(saas, erp, "Данные для управления предприятием", API)
+
+Rel(notify, director, "Отправка уведомлений", "SMS, push. email")
+Rel(notify, analit, "Отправка уведомлений", "SMS, push. email")
+Rel(director, erp, "Управление предприятием")
+Rel(analit, saas, "Подготовка отчётов")
+
+
+@enduml

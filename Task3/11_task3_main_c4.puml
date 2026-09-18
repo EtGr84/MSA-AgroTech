@@ -1,0 +1,96 @@
+@startuml
+title Спринт 1. MSA-AgroTech. C4. Код и классы компонентов Центрального сервера
+
+package "API Gateway (Envoy / Nginx)" {
+    class JwtAuthFilter {
+        +verifyJwt(token: String): Claims
+        +validateRoles(claims: Claims, requiredRole: String): boolean
+    }
+
+    class RoutingComponent {
+        -routeTable: Map<String, String>
+        +routeRequest(path: String, payload: HttpRequest): HttpResponse
+        +balanceLoad(serviceName: String): Endpoint
+    }
+}
+
+package "Telemetry & Machinery Service (Java / Spring)" {
+    class TelemetryController {
+        +receiveTelemetry(payload: TelemetryDTO): ResponseEntity
+        -validatePayload(payload: TelemetryDTO): boolean
+    }
+
+    class TelemetryProcessor {
+        -tsdbRepository: TsdbRepository
+        -alertEngine: MachineryAlertEngine
+        +processMetrics(metrics: List<Metric>): void
+        +normalizeData(raw: String): Metric
+    }
+
+    class MachineryAlertEngine {
+        -thresholdRules: Map<String, ThresholdConfig>
+        -notificationClient: NotificationRestClient
+        +evaluateMetric(metric: Metric): Optional<AlertEvent>
+        +triggerAlert(alert: AlertEvent): void
+    }
+
+    interface TsdbRepository {
+        +save(metric: Metric): void
+        +findBySensorId(sensorId: String, range: TimeRange): List<Metric>
+    }
+}
+
+package "Agro & Vet Service (Java / Spring)" {
+    class AgroManagementComponent {
+        -centralDbRepo: CentralDbRepository
+        -notificationClient: NotificationRestClient
+        +processCropData(data: AgroDTO): void
+        +checkIrrigationSchedules(): void
+    }
+
+    class VetMonitoringComponent {
+        -centralDbRepo: CentralDbRepository
+        -notificationClient: NotificationRestClient
+        +analyzeAnimalVitals(vitals: VetDTO): void
+        +flagHealthAnomaly(animalId: String, anomaly: String): void
+    }
+
+    interface CentralDbRepository {
+        +saveEntity(entity: BaseEntity): void
+        +findById(id: String): BaseEntity
+    }
+}
+
+package "Data Sync Service (Node.js / Go)" {
+    class SyncOrchestrator {
+        -resolver: ConflictResolver
+        -dbRepository: CentralDbRepository
+        +handleSync(agentId: String, syncPkg: SyncPackage): SyncResponse
+        -dispatchBatch(batch: List<BaseEntity>): void
+    }
+
+    class ConflictResolver {
+        +resolve(serverEntity: BaseEntity, clientEntity: BaseEntity): BaseEntity
+        -compareVersions(v1: Long, v2: Long): ResolutionStrategy
+    }
+}
+
+' Связи между классами
+JwtAuthFilter --> RoutingComponent : передает проверенный запрос
+RoutingComponent --> SyncOrchestrator : gRPC (пакеты синхронизации)
+RoutingComponent --> TelemetryController : HTTP/gRPC (телеметрия)
+RoutingComponent --> AgroManagementComponent : HTTP/gRPC (агро/вет запросы)
+
+TelemetryController --> TelemetryProcessor : вызывает обработку
+TelemetryProcessor --> TsdbRepository : сохранение сырых метрик
+TelemetryProcessor --> MachineryAlertEngine : передача на анализ
+MachineryAlertEngine --> TsdbRepository : чтение метрик для анализа
+
+SyncOrchestrator --> ConflictResolver : проверка коллизий версий
+SyncOrchestrator --> CentralDbRepository : запись бизнес-сущностей
+ConflictResolver --> CentralDbRepository : обновление сущностей
+
+AgroManagementComponent --> CentralDbRepository : чтение/запись данных
+VetMonitoringComponent --> CentralDbRepository : чтение/запись данных
+
+@enduml

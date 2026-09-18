@@ -1,0 +1,66 @@
+@startuml Instance-per-tenant
+
+!include <C4/C4_Component>
+
+LAYOUT_WITH_LEGEND()
+
+title Вариант C: Изоляция инстансов
+
+Person(client1, "Enterprise Client A", "агрохолдинг 1")
+Person(client2, "Enterprise Client B", "агрохолдинг 2")
+Person_Ext(saas_ops, "SaaS Ops Team", "Управление инфраструктурой")
+
+System_Boundary(control_plane, "Control Plane (Централизованный)") {
+    Container(tenant_orch, "Tenant Orchestrator", "Python + Terraform", "Управление жизненным циклом инстансов")
+    Container(billing_collector, "Billing Collector", "Python", "Сбор метрик использования от всех инстансов")
+    Container(analytics_agg, "Analytics Aggregator", "ClickHouse", "Кросс-tenant аналитика и ML")
+    Container(multi_cluster_mgmt, "Multi-Cluster Management", "Rancher/Lens", "Централизованное управление k8s кластерами")
+}
+
+System_Boundary(instance_a, "Выделенный инстанс A (k8s Namespace/Cluster)") {
+    Container(api_a, "API Gateway A", "Kong", "Для клиента 1")
+    Container(auth_a, "Auth Service A", "OAuth2", "Аутентификация 1")
+    Container(ingest_a, "Ingest A", "Go", "Телеметрия A")
+    Container(processor_a, "Processor A", "Python", "Обработка 1")
+    Container(queue_a, "RabbitMQ A", "Message Queue", "Очередь 1")
+    ContainerDb(db_a, "PostgreSQL A", "TimescaleDB", "Dedicated DB 1")
+    ContainerDb(s3_a, "S3 Bucket A", "Object Storage", "Видео 1")
+    Container(monitor_a, "Prometheus A", "Monitoring", "Метрики 1")
+}
+
+System_Boundary(instance_b, "Выделенный инстанс клиента 2 (k8s Namespace/Cluster)") {
+    Container(api_b, "API Gateway B", "Kong", "Для клиента 2")
+    Container(auth_b, "Auth Service B", "OAuth2", "Аутентификация 2")
+    Container(ingest_b, "Ingest B", "Go", "Телеметрия 2")
+    Container(processor_b, "Processor B", "Python", "Обработка 2")
+    Container(queue_b, "RabbitMQ B", "Message Queue", "Очередь 2")
+    ContainerDb(db_b, "PostgreSQL B", "TimescaleDB", "Dedicated DB 2")
+    ContainerDb(s3_b, "S3 Bucket B", "Object Storage", "Видео 2")
+    Container(monitor_b, "Prometheus B", "Monitoring", "Метрики 2")
+}
+
+Rel(ingest_b, queue_b, "Публикация")
+Rel(queue_b, processor_b, "Консьюминг")
+Rel(processor_b, db_b, "Запись")
+Rel(ingest_b, s3_b, "Хранение видео")
+Rel(saas_ops, tenant_orch, "Provision/Scale/Destroy инстансов")
+Rel(tenant_orch, instance_a, "IaC (Terraform)", "Управление инфраструктурой клиента 1")
+Rel(tenant_orch, instance_b, "IaC (Terraform)", "Управление инфраструктурой клиента 2")
+Rel(monitor_a, billing_collector, "Метрики использования A")
+Rel(client1, api_a, "HTTPS", "Эксклюзивный доступ")
+Rel(client2, api_b, "HTTPS", "Эксклюзивный доступ")
+Rel(api_b, auth_b, "Авторизация")
+Rel(api_b, ingest_b, "Роутинг")
+Rel(monitor_b, billing_collector, "Метрики использования B")
+Rel(processor_a, analytics_agg, "Анонимизированные данные для ML")
+Rel(api_a, auth_a, "Авторизация")
+Rel(api_a, ingest_a, "Роутинг")
+Rel(ingest_a, queue_a, "Публикация")
+Rel(queue_a, processor_a, "Консьюминг")
+Rel(processor_a, db_a, "Запись")
+Rel(ingest_a, s3_a, "Хранение видео")
+Rel(processor_b, analytics_agg, "Анонимизированные данные для ML")
+Rel(multi_cluster_mgmt, instance_a, "Мониторинг, деплой, обновления")
+Rel(multi_cluster_mgmt, instance_b, "Мониторинг, деплой, обновления")
+
+@enduml

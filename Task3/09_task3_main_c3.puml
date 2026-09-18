@@ -1,0 +1,79 @@
+@startuml
+!include <C4/C4_Component>
+
+title Спринт 1. MSA-AgroTech. C3. Компоненты Центрального сервера
+
+Person(mech, "Механик", "Мониторинг техники")
+Person(vet, "Ветеринар", "Получает уведомления о здоровье животных")
+Person(agro, "Агроном", "Контролирует процесс выращивания культур")
+Person(analit, "Аналитик", "Готовит отчёты для руководителя")
+Person(director, "Директор", "Общее управление предприятием")
+
+System_Ext(cameras_1, "Камеры и датчики на ферме 01", "Данные датчиков, видеопоток")
+System_Ext(notify, "Система уведомлений", "Уведомления (SMS, Push, Email)")
+System_Ext(erp, "ERP-система", "Финансы, склад, кадры")
+System_Ext(bi, "BI-система", "Подготовка отчетов")
+
+System_Boundary(agent_boundary, "Агент_01 (Локальный контур фермы)") {
+    Container(agent_app, "Agent Service", "Go / Python", "Сбор данных, первичная обработка и регистрация инцидентов")
+    ContainerDb(agent_db, "Local DB", "SQLite / Redis", "Временное кеширование данных")
+}
+
+System_Boundary(central_server_boundary, "Центральный сервер (Облачный контур)") {
+    
+    Container_Boundary(api_gateway_b, "API Gateway") {
+        Component(auth_comp, "Auth & Security Component", "Envoy/Nginx Filter", "Аутентификация, валидация JWT, проверка ролей")
+        Component(router_comp, "Routing Component", "Envoy/Nginx Router", "Балансировка и проксирование запросов к сервисам")
+    }
+
+    Container_Boundary(telemetry_service_b, "Telemetry & Machinery Service") {
+        Component(telemetry_processor, "Telemetry Processor", "Spring Bean", "Обработка и нормализация потока метрик с датчиков")
+        Component(machinery_alert, "Machinery Alert Engine", "Spring Bean", "Анализ состояния техники и генерация алертов")
+    }
+
+    Container_Boundary(agro_service_b, "Agro & Vet Service") {
+        Component(agro_logic, "Agro Management Component", "Spring Bean", "Бизнес-логика контроля выращивания культур")
+        Component(vet_logic, "Vet Monitoring Component", "Spring Bean", "Мониторинг здоровья животных и ветеринарных данных")
+    }
+
+    Container_Boundary(sync_service_b, "Data Sync Service") {
+        Component(sync_orch, "Sync Orchestrator", "Node.js / Go Module", "Управление сессиями синхронизации с агентами")
+        Component(conflict_resolver, "Conflict Resolver", "Node.js / Go Module", "Разрешение конфликтов версий данных (Offline-first)")
+    }
+    
+    ContainerDb(central_db, "Central Database", "PostgreSQL", "Хранение агрегированных данных, метаданных и настроек")
+    ContainerDb(tsdb, "Time-Series DB", "TimescaleDB / InfluxDB", "Хранение сырых метрик и телеметрии с датчиков")
+}
+
+Rel(cameras_1, agent_app, "Отправка сырых данных", "MQTT / HTTP")
+Rel_D(agent_app, agent_db, "Кеширование", "SQL / Key-Value")
+Rel(mech, agent_app, "Просмотр статуса", "Web/Mobile")
+Rel(vet, agent_app, "Просмотр состояния", "Web/Mobile")
+Rel(agro, agent_app, "Ввод данных", "Web/Mobile")
+
+Rel(agent_app, auth_comp, "Синхронизация данных и инцидентов", "HTTPS / gRPC")
+
+Rel(auth_comp, router_comp, "Проверенный запрос", "Internal")
+Rel(router_comp, sync_orch, "Пакеты синхронизации", "gRPC")
+Rel(router_comp, telemetry_processor, "Запросы по технике", "HTTP/gRPC")
+Rel(router_comp, agro_logic, "Запросы по агро/вет", "HTTP/gRPC")
+
+Rel(sync_orch, conflict_resolver, "Проверка коллизий", "Internal")
+Rel(conflict_resolver, central_db, "Запись бизнес-сущностей", "SQL")
+Rel(conflict_resolver, tsdb, "Запись сырых метрик", "SQL/Line Protocol")
+
+Rel(telemetry_processor, machinery_alert, "Передача метрик для анализа", "Internal")
+Rel(machinery_alert, tsdb, "Чтение метрик", "SQL")
+Rel(machinery_alert, notify, "Триггер уведомления при поломке", "REST API")
+
+Rel(agro_logic, central_db, "Чтение/Запись данных", "SQL")
+Rel(agro_logic, notify, "Триггер уведомления о здоровье/поливе", "REST API")
+Rel(agro_logic, erp, "Выгрузка данных по списаниям/урожаю", "REST API")
+
+Rel(notify, director, "Отправка уведомлений", "SMS, Push, Email")
+Rel(notify, analit, "Отправка уведомлений", "SMS, Push, Email")
+Rel(director, erp, "Управление предприятием", "GUI")
+Rel(analit, bi, "Построение BI-моделей", "SQL/API")
+Rel_L(bi, central_db, "Сбор агрегированных данных", "SQL (Read-Replica)")
+
+@enduml

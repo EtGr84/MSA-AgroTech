@@ -1,0 +1,66 @@
+@startuml
+title Спринт 1. MSA-AgroTech. C4. Структура классов и интерфейсов ключевых компонентов облачной платформы
+
+package "Stream Ingest (Telemetry Parser) [Go]" {
+    class TelemetryHandler {
+        +parseStream(data: ByteStream): TelemetryBatch
+        +validatePacket(packet: RawPacket): boolean
+    }
+    class KafkaPublisher {
+        -producer: KafkaProducerClient
+        +publishEvent(topic: String, event: Event): void
+    }
+}
+
+package "Cloud Video Analytics (ML Inference Engine) [Python + GPU]" {
+    class VideoProcessor {
+        -model: NeuralNetworkModel
+        +processFrame(frame: VideoFrame): InferenceResult
+        +detectAnomalies(features: Tensor): List<Anomaly>
+    }
+    class StorageClient {
+        -s3Client: S3BucketClient
+        +uploadVideoChunk(path: String, chunk: StreamChunk): void
+    }
+}
+
+package "Livestock Service (Livestock Domain Logic) [Go]" {
+    class LivestockController {
+        -repo: LivestockRepository
+        +getAnimalStatus(id: String): AnimalDTO
+        +updateAnimalRecord(record: AnimalDTO): void
+    }
+    interface LivestockRepository {
+        +save(animal: Animal): void
+        +findById(id: String): Animal
+    }
+}
+
+package "Incident Rule Engine (Event Correlator) [Go]" {
+    class EventConsumer {
+        -correlator: CorrelatorEngine
+        +consumeEvents(events: List<DomainEvent>): void
+    }
+    class CorrelatorEngine {
+        -rules: List<Rule>
+        +evaluateRules(event: DomainEvent): Optional<Alert>
+    }
+}
+
+package "Notification Subsystem (Notification Router) [Go]" {
+    class NotificationRouter {
+        -clients: Map<ChannelType, NotificationClient>
+        +routeAlert(alert: Alert): void
+    }
+    interface NotificationClient {
+        +send(recipient: String, message: String): boolean
+    }
+}
+
+TelemetryHandler --> KafkaPublisher : публикует телеметрию
+VideoProcessor --> StorageClient : сохранение фрагментов в Data Lake
+LivestockController --> LivestockRepository : SQL операции с OLTP DB
+EventConsumer --> CorrelatorEngine : передача событий для анализа
+CorrelatorEngine --> NotificationRouter : триггер тревожных алертов
+
+@enduml

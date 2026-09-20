@@ -13,7 +13,10 @@ System_Ext(cameras_1, "Камеры и датчики на ферме 01", "Да
 
 System_Boundary(agent_boundary, "Агент_01 (Локальный контур фермы)") {
     Container(agent_app, "Agent Service", "Go / Python", "Сбор данных, первичная обработка и регистрация инцидентов")
-    ContainerDb(agent_db, "Local DB", "SQLite / Redis", "Временное кеширование данных при отсутствии связи (Offline-first)")
+    ContainerDb(agent_db, "Local DB", "SQLite / Redis", "Временное кеширование данных)")
+    Container(localsync, "Sync Agent", "gRPC + AMQP", "Надёжная доставка, буфер при сбоях связи")
+    Container(local_broker, "Local Broker", "RabbitMQ", "Внутренняя шина событий\nна ферме. Развязывает\nкомпоненты. Поддерживает MQTT\nдля IoT-устройств. Видеопоток режется на чанки для передачи.")
+    Container(event_processor, "Event Processor", "Python / Go", "Получает события,\nприменяет правила (порог тревоги),\nформирует алерты. Оповещает\nоператора при офлайне.")
 }
 
 System_Boundary(central_server_boundary, "Центральный сервер (Облачный/Центральный контур)") {
@@ -33,13 +36,14 @@ System_Ext(bi, "BI-система", "Подготовка отчетов")
 
 
 Rel(cameras_1, agent_app, "Отправка сырых данных", "MQTT / HTTP")
-Rel_D(agent_app, agent_db, "Кеширование и чтение локальных данных", "SQL / Key-Value")
+Rel(agent_app, local_broker, "Кеширование и чтение локальных данных", "AMQP")
+Rel(local_broker, event_processor, "Кеширование и чтение локальных данных", "AMQP")
 
 Rel(mech, agent_app, "Просмотр локального статуса техники", "Web/Mobile")
 Rel(vet, agent_app, "Просмотр локального состояния животных", "Web/Mobile")
 Rel(agro, agent_app, "Ввод оперативных данных", "Web/Mobile")
 
-Rel(agent_app, api_gateway, "Синхронизация данных и инцидентов", "HTTPS / gRPC")
+Rel(localsync, api_gateway, "Синхронизация данных и инцидентов", "HTTPS / gRPC")
 
 Rel(api_gateway, sync_service, "Перенаправление пакетов синхронизации", "gRPC")
 Rel(api_gateway, telemetry_service, "Запросы пользователей / Агентов по технике", "HTTP/gRPC")
@@ -59,5 +63,7 @@ Rel(notify, analit, "Отправка уведомлений", "SMS, Push, Email
 Rel(director, erp, "Управление предприятием", "GUI")
 Rel(analit, bi, "Построение BI-моделей", "SQL/API")
 Rel_L(bi, central_db, "Сбор агрегированных данных для аналитики", "SQL (Read-Replica)")
+Rel(event_processor, agent_db, "Получение закешированных данных", "SQL")
+Rel(localsync, agent_db, "Получение закешированных данных", "SQL")
 
 @enduml

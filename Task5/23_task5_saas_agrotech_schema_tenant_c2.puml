@@ -1,74 +1,93 @@
-@startuml Schema-per-tenant
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+@startuml Current-Company-Integration
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
 
-LAYOUT_WITH_LEGEND()
 
-title Вариант A: Изоляция на уровне схем БД (Schema-per-tenant)
+title Интеграция текущей компании АгроПром Х как клиента SaaS-платформы (C2)
 
-Person(client_a, "Клиент A (Агрохолдинг 1)", "Директор, механики, аналитики")
-Person(client_b, "Клиент B (Агрохолдинг 2)", "Директор, механики, аналитики")
-Person(client_c, "Клиент C (Агрохолдинг 3)", "Директор, механики, аналитики")
+Person(director, "Директор хозяйства", "Управляет всеми фермами компании")
+Person(analyst, "Аналитик", "Корпоративная аналитика")
+Person(mechanic, "Механик", "Обслуживает технику")
 
-System_Boundary(saas, "SaaS Платформа") {
 
-    Container_Boundary(gateway, "API Gateway & Auth") {
-        Component(api_gw, "API Gateway", "Kong/Traefik", "Маршрутизация запросов")
-        Component(tenant_router, "Tenant Router", "Go", "Определение tenant_id из токена/домена")
-        Component(auth, "Auth Service", "OAuth2/JWT", "Аутентификация с tenant context")
-    }
-
-    Container_Boundary(services, "Application Services") {
-        Component(ingest_svc, "Ingest Service", "Go/Python", "Приём телеметрии с tenant_id. Использует schema из контекста тенанта (SearchPath)")
-        Component(processor_svc, "Processor Service", "Python", "Обработка событий. Принимает данные от edge-агентов.\nОпределяет тенанта по API-ключу.Пишет в нужную схему БД")
-        Component(analytics_svc, "Analytics Service", "Python", "Аналитика и отчёты. Использует schema из контекста тенанта (SearchPath)")
-        Component(notification_svc, "Notification Service", "Node.js", "Уведомления")
-    }
-
-    Container_Boundary(data_layer, "Data Layer - Single Database") {
-        ContainerDb(shared_db, "PostgreSQL/TimescaleDB", "Shared DB", "Единая БД с множеством схем")
-
-        Component(schema_a, "Schema: tenant_a", "PostgreSQL Schema", "События, метрики, пользователи клиента A")
-        Component(schema_b, "Schema: tenant_b", "PostgreSQL Schema", "События, метрики, пользователи клиента B")
-        Component(schema_c, "Schema: tenant_c", "PostgreSQL Schema", "События, метрики, пользователи клиента C")
-        Component(rls, "Row-Level Security", "PostgreSQL Policy", "Дополнительная защита от утечек")
-    }
-
-    Container_Boundary(pool, "Connection Management") {
-        Component(conn_pool, "Connection Pool", "PgBouncer", "Единый пул с переключением search_path")
-    }
-
-    ContainerDb(cache, "Redis", "Cache", "Кэш tenant mappings и сессий")
-    ContainerDb(s3, "S3 Storage", "Object Storage", "Видео разделено по префиксам tenant_id")
-
-    Container(monitoring, "Monitoring", "Prometheus+Grafana", "Метрики для каждого tenant")
+System_Boundary(company_systems, "Cистемы АгроПром Х") {
+    Container(erp_1c, "1С:Предприятие", "ERP", "Учёт, финансы, складской учёт")
+    Container(vet_system, "Ветеринарная система", "Учёт здоровья", "Карточки животных, вакцинация")
+    Container(powerbi, "Power BI", "BI-система", "Корпоративная аналитика и отчёты")
+    Container(corp_sso, "Corporate SSO", "Active Directory", "Корпоративная аутентификация")
 }
 
-Rel(client_a, api_gw, "HTTPS", "API вызов с tenant=A в токене")
-Rel(client_b, api_gw, "HTTPS", "API вызов с tenant=B в токене")
-Rel(client_c, api_gw, "HTTPS", "API вызов с tenant=C в токене")
+System_Boundary(farms, "Фермы АгроПром Х") {
 
-Rel(api_gw, tenant_router, "Извлекает tenant_id")
-Rel(tenant_router, auth, "Валидация токена + tenant context")
-Rel(tenant_router, cache, "Кэширование tenant info")
+    System_Boundary(farm_1, "Ферма 1") {
+        Container(iot_farm1, "IoT Gateway 1", "Node-RED", "Сенсоры, камеры фермы 1")
+    }
 
-Rel(api_gw, ingest_svc, "Передача с tenant_id в header")
-Rel(api_gw, analytics_svc, "Передача с tenant_id")
+    System_Boundary(farm_2, "Ферма 2") {
+        Container(iot_farm2, "IoT Gateway 2", "Node-RED", "Сенсоры, камеры фермы 2")
+    }
 
-Rel(ingest_svc, conn_pool, "SET search_path = tenant_a", "")
-Rel(processor_svc, conn_pool, "SET search_path = tenant_b", "")
-Rel(analytics_svc, conn_pool, "SET search_path = tenant_c", "")
+    System_Boundary(farm_3, "Ферма 3") {
+        Container(iot_farm3, "IoT Gateway 3", "Node-RED", "Сенсоры, камеры фермы 3")
+    }
+}
 
-Rel(conn_pool, shared_db, "Переключение схем")
+System_Boundary(saas, "SaaS-платформа АгроПром Х") {
 
-Rel_Down(shared_db, schema_a, "Содержит")
-Rel_Down(shared_db, schema_b, "Содержит")
-Rel_Down(shared_db, schema_c, "Содержит")
-Rel(shared_db, rls, "Применяет политики")
+    Container(api_gateway, "API Gateway", "Kong", "Роутинг с tenant_id=agrox_internal")
+    Container(auth, "Auth Service", "OAuth2/OIDC", "Федерация с Corp SSO")
 
-Rel(processor_svc, notification_svc, "Триггер уведомлений")
-Rel(ingest_svc, s3, "Запись видео /tenant_a/...")
-Rel(processor_svc, s3, "Запись видео /tenant_b/...")
+    Container_Boundary(tenant_instance, "Инстанс tenant'а: agrox_internal") {
+        Container(ingest, "Ingest Service", "Go", "Приём от 3 ферм")
+        Container(processor, "Processor Service", "Python + ML", "Real-time обработка")
+        Container(analytics_svc, "Analytics Service", "Python", "Агрегация метрик")
+        Container(notification, "Notification Service", "Node.js", "Уведомления")
+        Container(webhook, "Webhook Service", "Node.js", "События для ERP/Vet")
+        Container(export, "Export Service", "Python", "Экспорт для Power BI")
 
-Rel(services, monitoring, "Метрики с tenant_id")
+        ContainerDb(tenant_db, "Database: agrox_internal", "TimescaleDB", "Выделенная БД для компании")
+        ContainerDb(s3_tenant, "S3: agrox-internal-video", "S3", "Видео от 3 ферм")
+    }
+
+    Container(message_queue, "RabbitMQ", "Message Queue", "Event bus")
+
+    Container(web_portal, "Web Portal", "React", "UI для пользователей")
+    Container(mobile_app, "Mobile App", "React Native", "Мобильные уведомления")
+}
+
+Rel(director, web_portal, "HTTPS", "Мониторинг всех ферм")
+Rel(analyst, web_portal, "HTTPS", "Просмотр аналитики")
+Rel(mechanic, mobile_app, "HTTPS", "Получает уведомления")
+
+Rel(web_portal, api_gateway, "REST API", "tenant=agrox_internal")
+Rel(mobile_app, api_gateway, "REST API", "tenant=agrox_internal")
+
+Rel(api_gateway, auth, "Validate token")
+Rel(auth, corp_sso, "SAML/OIDC Federation", "Используется корпоративный SSO")
+Rel(director, corp_sso, "Логин через AD")
+
+Rel_R(iot_farm1, api_gateway, "MQTT/HTTPS", "Телеметрия фермы 1")
+Rel_R(iot_farm2, api_gateway, "MQTT/HTTPS", "Телеметрия фермы 2")
+Rel_R(iot_farm3, api_gateway, "MQTT/HTTPS", "Телеметрия фермы 3")
+
+Rel(api_gateway, ingest, "Форвардинг событий")
+Rel_D(ingest, message_queue, "Публикация")
+Rel_U(message_queue, processor, "Консьюминг")
+Rel(processor, tenant_db, "Запись событий")
+Rel_L(processor, s3_tenant, "Хранение видео")
+Rel(processor, notification, "Триггер алертов")
+Rel(notification, mechanic, "Отправка уведомлений", "Критические события")
+
+Rel(processor, webhook, "Событие зафиксировано")
+Rel(webhook, vet_system, "Webhook", "Уведомление о заболевании животного")
+Rel(webhook, erp_1c, "REST API", "Обновление данных о поголовье")
+
+Rel(export, tenant_db, "Чтение данных")
+Rel(powerbi, export, "REST API", "Загрузка метрик для отчётов")
+Rel(powerbi, api_gateway, "Direct API", "Real-time данные")
+
+Rel(analytics_svc, tenant_db, "Query метрик")
+Rel(web_portal, analytics_svc, "Запрос отчётов")
+
+
 
 @enduml

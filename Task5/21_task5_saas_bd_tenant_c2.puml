@@ -1,6 +1,6 @@
 @startuml Database-per-tenant
 
-!include <C4/C4_Context>
+!include <C4/C4_Component>
 
 title Вариант B: Изоляция на уровне БД
 
@@ -20,9 +20,9 @@ System_Boundary(saas, "SaaS Платформа") {
     }
 
     Container_Boundary(core_services, "Core Services") {
-        Container(ingest, "Ingest Service", "Go/Python", "Приём телеметрии (tenant-aware)")
-        Container(processor, "Processor Service", "Python + ML", "Real-time обработка событий")
-        Container(analytics, "Analytics Service", "Python", "Отчёты и дашборды")
+        Container(ingest, "Ingest Service", "Go/Python", "Приём телеметрии (tenant-aware). Динамически подключается\nк БД тенанта по connection pool.\nИзоляция на уровне БД ")
+        Container(processor, "Processor Service", "Python + ML", "Real-time обработка событий. Динамически подключается\nк БД тенанта по connection pool.\nИзоляция на уровне БД")
+        Container(analytics, "Analytics Service", "Python", "Отчёты и дашборды. Динамически подключается\nк БД тенанта по connection pool.\nИзоляция на уровне БД")
         Container(notification, "Notification Service", "Node.js", "Push, SMS, Email")
     }
 
@@ -50,7 +50,11 @@ Rel(client_a, api_gateway, "HTTPS", "tenant=A в токене/домене")
 Rel(client_b, api_gateway, "HTTPS", "tenant=B в токене/домене")
 Rel(client_c, api_gateway, "HTTPS", "tenant=C в токене/домене")
 Rel(processor, pool_b, "Чтение, запись (только для tenant_b)")
+Rel(processor, pool_c, "Чтение, запись (только для tenant_с)")
+Rel(processor, pool_a, "Чтение, запись (только для tenant_ф)")
 Rel(analytics, pool_c, "Чтение (только для tenant_c)")
+Rel(analytics, pool_b, "Чтение (только для tenant_b)")
+Rel(analytics, pool_a, "Чтение (только для tenant_a)")
 Rel(pool_a, db_tenant_a, "Изолированное подключение")
 Rel(pool_b, db_tenant_b, "Изолированное подключение")
 Rel(pool_c, db_tenant_c, "Изолированное подключение")
@@ -66,6 +70,8 @@ Rel(api_gateway, analytics, "Роутинг с tenant")
 Rel(ingest, message_queue, "Публикация (tenant_id routing key)")
 Rel(message_queue, processor, "Консьюминг events per tenant")
 Rel(ingest, pool_a, "Запись (только для tenant_a)")
+Rel(ingest, pool_b, "Запись (только для tenant_b)")
+Rel(ingest, pool_c, "Запись (только для tenant_c)")
 Rel(provisioner, db_cluster, "CREATE DATABASE tenant_x + миграции")
 Rel(backup_orch, db_cluster, "Бэкапы всех БД по расписанию")
 Rel(monitoring, core_services, "Сбор метрик")
